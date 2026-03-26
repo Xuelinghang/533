@@ -1,7 +1,9 @@
 ---
-title: "hello"
+title: "Home"
 ---
 
-This is a Quarto website.
+# Welcome
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+This is my FIN 533 Quarto website.
+
+Here I will share course work, projects, and notes.

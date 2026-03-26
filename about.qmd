@@ -2,4 +2,10 @@
 title: "About"
 ---
 
-About this site
+## About Me
+
+Linghang Xue — Duke University, FINTECH 533 Spring 2026.
+
+## Contact
+
+Feel free to reach out via [GitHub](https://github.com/Xuelinghang).
