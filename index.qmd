@@ -4,6 +4,6 @@ title: "Home"
 
 # Welcome
 
-This is my FIN 533 Quarto website.
+This is my FINTECH 533 Quarto website.
 
 Here I will share course work, projects, and notes.
