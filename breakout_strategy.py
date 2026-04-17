@@ -211,6 +211,9 @@ def run_backtest(data: pd.DataFrame) -> pd.DataFrame:
                  stop loss     = entry + STOP_LOSS_ATR x ATR
         - Timeout: close at market after TIMEOUT_DAYS trading days.
 
+    Entries are only allowed if at least one bar remains after the entry bar
+    (otherwise the trade can never be resolved and is skipped).
+
     Only one position at a time (no overlapping trades).
 
     Returns a DataFrame - the trade blotter.
@@ -236,6 +239,14 @@ def run_backtest(data: pd.DataFrame) -> pd.DataFrame:
             atr_at_entry = row["atr"]
             direction    = sig  # "LONG" or "SHORT"
 
+            # Skip entries on the very last bar of the dataset - there is no
+            # subsequent bar to resolve the trade against, which would produce
+            # a phantom zero-hold trade.
+            entry_idx_abs = data.index.get_loc(entry_date)
+            if entry_idx_abs >= len(data) - 1:
+                j += 1
+                continue
+
             if direction == "LONG":
                 tp = entry_price + PROFIT_TARGET_ATR * atr_at_entry
                 sl = entry_price - STOP_LOSS_ATR * atr_at_entry
@@ -250,7 +261,7 @@ def run_backtest(data: pd.DataFrame) -> pd.DataFrame:
             holding    = 0
 
             # Scan forward day-by-day from the bar after entry
-            search_start = data.index.get_loc(entry_date) + 1
+            search_start = entry_idx_abs + 1
 
             for k in range(search_start, min(search_start + TIMEOUT_DAYS, len(data))):
                 day_date = data.index[k]

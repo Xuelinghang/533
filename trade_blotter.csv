@@ -34,4 +34,3 @@ entry_date,exit_date,direction,entry_price,exit_price,qty,pnl,return,outcome,hol
 2026-02-06,2026-02-11,LONG,54.26,53.0618,100,-119.82,-0.022082,Stop-loss,3
 2026-02-12,2026-02-27,SHORT,51.69,51.43,100,26.0,0.00503,Timed-out,10
 2026-03-27,2026-03-31,SHORT,47.81,49.1576,100,-134.76,-0.028187,Stop-loss,2
-2026-04-17,2026-04-17,LONG,52.43,52.43,100,0.0,0.0,Timed-out,0
