@@ -10,6 +10,8 @@ website:
         text: Home
       - href: about.qmd
         text: About
+      - href: breakout.qmd
+        text: Breakout Strategy
 
 format:
   html:
@@ -18,6 +20,3 @@ format:
       - brand
     css: styles.css
     toc: true
-
-
-

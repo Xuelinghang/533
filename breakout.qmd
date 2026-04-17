@@ -1,0 +1,268 @@
+---
+title: "XLF Donchian Breakout Strategy"
+subtitle: "A volume-confirmed channel breakout system backtested on the Financial Select Sector SPDR Fund"
+author: "Linghang Xue"
+date: "2026-04-14"
+toc: true
+toc-depth: 3
+format:
+  html:
+    code-fold: true
+    code-summary: "Show code"
+---
+
+```{=html}
+<style>
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.8rem;margin:1.2rem 0}
+.metric-card{background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:1rem 1.2rem}
+.metric-card .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;margin-bottom:.2rem}
+.metric-card .value{font-family:'Courier New',monospace;font-size:1.4rem;font-weight:600;color:#212529}
+.metric-card .value.positive{color:#198754}
+.metric-card .value.negative{color:#dc3545}
+.metric-card .note{font-size:.73rem;color:#6c757d;margin-top:.3rem;line-height:1.4}
+.outcome-row{display:flex;gap:.8rem;flex-wrap:wrap;margin:1rem 0}
+.pill{display:flex;align-items:center;gap:.4rem;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:.5rem 1rem;font-family:monospace;font-size:.9rem}
+.pill .dot{width:9px;height:9px;border-radius:50%}
+.pill .dot.green{background:#198754}
+.pill .dot.red{background:#dc3545}
+.pill .dot.amber{background:#fd7e14}
+</style>
+```
+
+## Strategy Logic
+
+This strategy attempts to capture directional moves in XLF by entering trades the moment price breaks out of a recently established trading range. The core premise is that when a security trades sideways for a stretch of time, the range defined by its recent highs and lows represents a kind of equilibrium between buyers and sellers. When price decisively pierces one side of that range — particularly on elevated volume — it signals that the balance has broken and that a new directional trend is more likely than mean reversion in the short term. To operationalise this intuition, the system continuously monitors a 10-day Donchian Channel (the rolling 10-day high and low), and initiates a long position on a close above the upper band or a short position on a close below the lower band, but only if the day's volume meaningfully exceeds its recent average. Once in a trade, exits are governed by an ATR-based risk framework: profits are taken at 2× the 14-day Average True Range, stops are placed at 1.5× ATR, and any unresolved position is flattened after 10 trading days. The full backtest uses a rolling walk-forward design (roughly one year of data precedes each quarter of out-of-sample trading) to produce results that reflect how the strategy would actually have performed in real time, rather than with hindsight.
+
+## Asset Selection
+
+I chose **XLF — the Financial Select Sector SPDR Fund** — as the target asset for this strategy after considering several criteria that make an instrument well-suited to breakout trading.
+
+**Why a sector ETF rather than a single stock.** Individual stocks are prone to idiosyncratic shocks (earnings surprises, management changes, litigation) that can trigger outsized moves unrelated to any technical structure, flooding a breakout system with false signals. A sector ETF smooths out company-specific noise while still exhibiting meaningful sector-level trends driven by macro factors — for the financial sector, that means interest rates, credit spreads, and regulatory news.
+
+**Why the financial sector specifically.** Financials tend to exhibit strong regime-driven behaviour: the sector oscillates between clear uptrends (during rate-hiking cycles, steepening yield curves, or periods of strong loan growth) and clear downtrends (during rate cuts, credit stress, or banking crises). These alternating regimes tend to produce the kind of sustained directional moves that breakout systems are designed to capture, rather than the continuously choppy behaviour that would generate whipsaws.
+
+**Liquidity and tradability.** XLF is one of the most liquid sector ETFs in the world, with average daily volume consistently in the tens of millions of shares and extremely tight bid-ask spreads. This matters for a breakout system because signals are generated at specific price levels, and poor liquidity would translate directly into slippage that erodes the edge. The volume confirmation rule also relies on having a reliable, well-populated volume series — something XLF provides without gaps.
+
+**Selection process.** I considered several alternatives (SPY for broad market exposure, XLK for technology, QQQ for large-cap growth, and individual financial names like JPM and BAC). SPY and QQQ were rejected as too diversified — they exhibit mean-reverting behaviour around their long-term uptrend that tends to produce false breakouts. Individual stocks were rejected for the idiosyncratic-noise reason above. XLK was a reasonable candidate but tech has been in an extended one-directional uptrend during the sample period, which would bias the backtest. XLF offered the best combination of liquidity, clean sector-level trends, two-sided breakouts (both up and down), and sufficient historical volatility to make the ATR-based exit framework meaningful.
+
+## Breakout Definition
+
+A **breakout** in this strategy is a daily bar that satisfies three strict conditions simultaneously:
+
+1. **Price condition (direction).** The closing price must pierce one side of the previous day's Donchian Channel. A close above the prior 10-day high triggers a potential long; a close below the prior 10-day low triggers a potential short.
+2. **Volume condition (confirmation).** The day's trading volume must be at least 1.0× its 10-day simple moving average. This filters out breakouts that occur on thin volume, which historically revert far more often than volume-confirmed breakouts.
+3. **No look-ahead.** The Donchian high and low are computed over the 10 days *preceding* the current bar (shifted by one day), so the signal could actually have been generated in real time on the close of that day.
+
+The specific indicators and parameter values are summarised below.
+
+### Technical Indicators
+
+**Donchian Channel (10 days).** The upper band is the highest high of the prior 10 trading days; the lower band is the lowest low of the prior 10 trading days. I chose 10 days as the lookback after reviewing how XLF's price action cycles — 10 days is long enough to define a meaningful range (roughly two trading weeks) but short enough that the channel responds to new regimes without lag. Longer lookbacks (20–55 days, as in the classic Turtle system) produced too few signals on XLF given its relatively contained volatility.
+
+**Average True Range (14 days).** Used to size both the profit target and the stop-loss. ATR adapts to prevailing volatility — stops are wider in volatile periods and tighter in calm periods — which is more robust than using fixed percentage or dollar distances.
+
+**Volume moving average (10 days).** A simple 10-day SMA of daily volume, used as the baseline for the volume confirmation filter.
+
+### Parameter Values
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Donchian lookback | 10 days | Captures ~2 weeks of range; responsive to regime changes |
+| Volume multiplier | 1.0 × 10d avg | Requires above-average volume without being restrictive |
+| ATR period | 14 days | Standard Wilder default; balances responsiveness and smoothness |
+| Profit target | 2.0 × ATR | Typical risk-reward setup targeting 2:1 payoff |
+| Stop-loss | 1.5 × ATR | Wide enough to absorb normal noise, tight enough to cap losses |
+| Timeout | 10 trading days | Prevents capital being tied up in stalled trades |
+| Position size | 100 shares | Consistent sizing assumption from Assignment 2 |
+| Risk-free rate | 3.75% annualised | Current 3-month T-bill yield used in Sharpe calculation |
+| Walk-forward train | ~252 days | ~1 year of indicator warm-up per pass |
+| Walk-forward OOS | ~63 days | ~1 quarter of out-of-sample trading per pass |
+
+### Detection Function (plain English)
+
+The `detect_breakout()` function inspects each daily bar and returns one of three values: **LONG**, **SHORT**, or **NONE**. It first checks whether the day's volume clears the moving-average threshold — if not, no signal is generated regardless of price. If the volume gate passes, the function then checks the closing price against the two channel boundaries. If the close exceeds the prior 10-day high, it returns LONG. If the close falls below the prior 10-day low, it returns SHORT. Otherwise it returns NONE and no trade is initiated that day.
+
+```python
+def detect_breakout(row):
+    """Return 'LONG', 'SHORT', or 'NONE' for a single daily bar."""
+    vol_ok = row["volume"] >= VOLUME_MULT * row["vol_avg"]
+    if row["close"] > row["don_high"] and vol_ok:
+        return "LONG"
+    if row["close"] < row["don_low"] and vol_ok:
+        return "SHORT"
+    return "NONE"
+```
+
+## Price & Donchian Channel
+
+```{python}
+#| label: fig-price-channel
+#| fig-cap: "XLF closing price with 10-day Donchian Channel boundaries. Long signals occur when price closes above the green upper band with above-average volume; short signals when price closes below the red lower band with the same volume confirmation."
+
+import pandas as pd
+import plotly.graph_objects as go
+
+# ── Load chart data exported by breakout_strategy.py ─────────────────────────
+chart = pd.read_csv("chart_data.csv", index_col=0, parse_dates=True)
+
+fig = go.Figure()
+fig.add_trace(go.Scatter(
+    x=chart.index, y=chart["don_low"], mode="lines",
+    name="Donchian Low", line=dict(color="#dc3545", width=1, dash="dot"),
+))
+fig.add_trace(go.Scatter(
+    x=chart.index, y=chart["don_high"], mode="lines",
+    name="Donchian High", line=dict(color="#198754", width=1, dash="dot"),
+    fill="tonexty", fillcolor="rgba(39,128,227,0.06)",
+))
+fig.add_trace(go.Scatter(
+    x=chart.index, y=chart["close"], mode="lines",
+    name="XLF Close", line=dict(color="#2780e3", width=1.8),
+))
+fig.update_layout(
+    height=420, margin=dict(l=50, r=20, t=30, b=40),
+    xaxis_title="Date", yaxis_title="Price ($)",
+    legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center"),
+    hovermode="x unified",
+)
+fig.show()
+```
+
+## Performance Metrics
+
+```{python}
+#| label: metrics-display
+#| output: asis
+
+import json
+
+with open("metrics.json") as f:
+    metrics = json.load(f)
+
+notes = {
+    "Total Trades": "Number of completed round-trip trades",
+    "Average Return per Trade": "Mean percentage return across all trades",
+    "Annualised Return (%)": "Projected yearly return based on trade frequency",
+    "Annualised Volatility (%)": "Yearly standard deviation of trade returns",
+    "Sharpe Ratio": "Risk-adjusted return (rf = 3.75%); higher is better",
+    "Sortino Ratio": "Downside-risk-adjusted return; higher is better",
+    "Max Drawdown ($)": "Largest cumulative P&L decline from peak",
+    "Win Rate (%)": "Percentage of trades with positive return",
+    "Profit Factor": "Gross profit ÷ gross loss; >1 means net profitable",
+    "Expectancy (%)": "Probability-weighted average return per trade",
+}
+
+html = '<div class="metric-grid">'
+for key, val in metrics.items():
+    cls = ""
+    if isinstance(val, (int, float)):
+        cls = "positive" if val > 0 else ("negative" if val < 0 else "")
+    display_val = f"{val:,}" if isinstance(val, (int, float)) else val
+    note = notes.get(key, "")
+    html += f'''<div class="metric-card">
+      <div class="label">{key}</div>
+      <div class="value {cls}">{display_val}</div>
+      <div class="note">{note}</div>
+    </div>'''
+html += '</div>'
+print(html)
+```
+
+## Trade Outcome Analysis
+
+Every trade resolves in one of three ways: **Successful** — the profit target (2×ATR from entry) was hit; **Stop-loss** — price moved adversely by 1.5×ATR and the position was closed at the stop; **Timed-out** — neither target nor stop was reached within 10 trading days, so the position was closed at market.
+
+```{python}
+#| label: fig-outcomes
+#| fig-cap: "Distribution of trade outcomes across all backtested trades."
+
+with open("outcomes.json") as f:
+    outcomes = json.load(f)
+
+color_map = {"Successful": "#198754", "Stop-loss": "#dc3545", "Timed-out": "#fd7e14"}
+
+# Pills
+pill_html = '<div class="outcome-row">'
+for outcome, count in outcomes.items():
+    c = "green" if outcome == "Successful" else ("red" if outcome == "Stop-loss" else "amber")
+    pill_html += f'<div class="pill"><span class="dot {c}"></span>{outcome}: <strong>{count}</strong></div>'
+pill_html += '</div>'
+
+from IPython.display import HTML
+display(HTML(pill_html))
+
+# Bar chart
+labels = list(outcomes.keys())
+values = list(outcomes.values())
+colors = [color_map.get(l, "#6c757d") for l in labels]
+
+fig = go.Figure(go.Bar(
+    x=labels, y=values, marker_color=colors,
+    text=values, textposition="outside",
+))
+fig.update_layout(
+    height=340, margin=dict(l=40, r=20, t=30, b=40),
+    yaxis_title="Count", xaxis_title="",
+)
+fig.show()
+```
+
+### Cumulative P&L
+
+```{python}
+#| label: fig-cum-pnl
+#| fig-cap: "Cumulative profit & loss across all trades in chronological order."
+
+blotter = pd.read_csv("trade_blotter.csv", parse_dates=["entry_date", "exit_date"])
+cum_pnl = blotter["pnl"].cumsum()
+
+fig = go.Figure(go.Scatter(
+    x=blotter["exit_date"], y=cum_pnl, mode="lines+markers",
+    line=dict(color="#6f42c1", width=2),
+    marker=dict(size=5, color=["#198754" if v >= 0 else "#dc3545" for v in cum_pnl]),
+    fill="tozeroy", fillcolor="rgba(111,66,193,0.06)",
+))
+fig.update_layout(
+    height=380, margin=dict(l=55, r=20, t=30, b=40),
+    yaxis_title="Cumulative P&L ($)", xaxis_title="Date",
+    yaxis=dict(zeroline=True, zerolinecolor="#dee2e6"),
+)
+fig.show()
+```
+
+## Trade Blotter
+
+Complete ledger of all backtested trades. Also available as a [downloadable CSV](trade_blotter.csv).
+
+```{python}
+#| label: tbl-blotter
+#| tbl-cap: "Full trade blotter with entry/exit details, P&L, and outcome."
+
+from IPython.display import display
+
+blotter_display = blotter[[
+    "entry_date", "exit_date", "direction", "entry_price", "exit_price",
+    "qty", "pnl", "return", "outcome", "holding_days"
+]].copy()
+blotter_display.columns = [
+    "Entry Date", "Exit Date", "Direction", "Entry $", "Exit $",
+    "Qty", "P&L ($)", "Return", "Outcome", "Days Held"
+]
+blotter_display["Entry Date"] = blotter_display["Entry Date"].dt.strftime("%Y-%m-%d")
+blotter_display["Exit Date"]  = blotter_display["Exit Date"].dt.strftime("%Y-%m-%d")
+blotter_display["Return"]     = (blotter_display["Return"] * 100).round(2).astype(str) + "%"
+blotter_display.index = range(1, len(blotter_display) + 1)
+blotter_display.index.name = "#"
+
+display(blotter_display)
+```
+
+## Walk-Forward Methodology
+
+The backtest uses a **rolling walk-forward** framework: each pass trains on roughly 252 trading days (~1 year) of historical data and then trades signals generated during the subsequent 63-day (~1 quarter) out-of-sample window. The window then advances by one quarter and the process repeats until the end of the dataset. Because the Donchian Channel and ATR parameters are held fixed rather than re-optimised in each training window, the walk-forward primarily ensures that indicator warm-up periods do not contaminate results and that performance is measured strictly on out-of-sample bars.
+
+Only one position is held at a time — if a trade is still open when a new signal fires, the new signal is skipped. This conservative constraint avoids leveraged exposure and simplifies risk management. All P&L figures assume a flat 100-share position with no commissions or slippage.
+
+### Data Retrieval
+
+Historical daily and hourly price data for XLF is fetched using **ShinyBroker** (`sb.fetch_historical_data`) with a 3-year duration. Hourly bars are used for intraday stop/target fill detection; daily bars drive the breakout signals and serve as the primary ledger timeframe. The full Python implementation is available in the source file: [`breakout_strategy.py`](breakout_strategy.py).
